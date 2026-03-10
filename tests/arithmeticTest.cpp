@@ -56,19 +56,19 @@ template<class FloatType> void doTest(string s, string name) {
 
     ofstream basicfile((s + "_" + name + "_basic.bin").c_str());
     if (!basicfile) {
-        cout << "Problem creating binary file: " << basicfile << endl;
+        cout << "Problem creating binary file: " << (s + "_" + name + "_basic.bin") << endl;
         exit(2);
     }
 
     ofstream infnanfile((s + "_" + name + "_nan.bin").c_str());
     if (!infnanfile) {
-        cout << "Problem creating binary file: " << infnanfile << endl;
+        cout << "Problem creating binary file: " << (s + "_" + name + "_nan.bin") << endl;
         exit(3);
     }
 
     ofstream mathlibfile((s + "_" + name + "_lib.bin").c_str());
     if (!mathlibfile) {
-        cout << "Problem creating binary file: " << mathlibfile << endl;
+        cout << "Problem creating binary file: " << (s + "_" + name + "_lib.bin") << endl;
         exit(4);
     }
 
