@@ -5,10 +5,11 @@ project(streflop C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Option to use SSE instead of extended precision (x87)
+# Options
 option(STREFLOP_SSE "Use SSE instead of x87 extended precision" OFF)
 option(STREFLOP_SOFT "Use soft float" OFF)
 option(STREFLOP_NO_DENORMALS "Squash denormals to zero" OFF)
+option(BUILD_TESTS "Build test executables" OFF)
 
 # Float-32 source files
 SET(libm_flt32_source
@@ -215,18 +216,18 @@ SET(libm_ldbl96_source
 	"libm/ldbl-96/w_expl.cpp"
 )
 
-# Setup compile flags for libm sources
-SET(cxxflags "-I\"${CMAKE_CURRENT_SOURCE_DIR}/libm/headers\"")
-if(NOT MSVC)
-	SET(cxxflags "${cxxflags} -w -O3 -Wno-narrowing")
-	if(STREFLOP_SSE)
-		SET(cxxflags "${cxxflags} -mfpmath=sse -msse -msse2")
-	elseif(NOT STREFLOP_SOFT)
-		SET(cxxflags "${cxxflags} -mfpmath=387")
-	endif()
-elseif(MSVC AND MARCH_BITS EQUAL 64)
+# MSVC 64-bit requires an ASM file for FPU settings
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
 	ENABLE_LANGUAGE(ASM_MASM)
 	SET(fpu_settings_asm "FPUSettings.asm")
+endif()
+
+# Compile flags for libm sources only: include path and warning suppression.
+# Optimization and fpmath flags are set via target_compile_options and apply
+# to all sources (including libm) uniformly.
+SET(cxxflags "-I\"${CMAKE_CURRENT_SOURCE_DIR}/libm/headers\"")
+if(NOT MSVC)
+	SET(cxxflags "${cxxflags} -w -Wno-narrowing")
 endif()
 
 # Set compile flags for libm sources
@@ -318,9 +319,6 @@ if(NOT MSVC)
 	# Use PIC flag for position independent code
 	set_target_properties(streflop PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
-
-# Optional: Build test executables
-option(BUILD_TESTS "Build test executables" OFF)
 
 if(BUILD_TESTS)
 	add_executable(arithmeticTest tests/arithmeticTest.cpp)
