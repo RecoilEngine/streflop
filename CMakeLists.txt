@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Option to use SSE instead of extended precision (x87)
 option(STREFLOP_SSE "Use SSE instead of x87 extended precision" OFF)
 option(STREFLOP_SOFT "Use soft float" OFF)
+option(STREFLOP_NO_DENORMALS "Squash denormals to zero" OFF)
 
 # Float-32 source files
 SET(libm_flt32_source
@@ -218,8 +219,10 @@ SET(libm_ldbl96_source
 SET(cxxflags "-I\"${CMAKE_CURRENT_SOURCE_DIR}/libm/headers\"")
 if(NOT MSVC)
 	SET(cxxflags "${cxxflags} -w -O3 -Wno-narrowing")
-	if(NOT $ENV{CXX} MATCHES "icpc")
-		SET(cxxflags "${cxxflags} -mfpmath=sse -msse")
+	if(STREFLOP_SSE)
+		SET(cxxflags "${cxxflags} -mfpmath=sse -msse -msse2")
+	elseif(NOT STREFLOP_SOFT)
+		SET(cxxflags "${cxxflags} -mfpmath=387")
 	endif()
 elseif(MSVC AND MARCH_BITS EQUAL 64)
 	ENABLE_LANGUAGE(ASM_MASM)
@@ -247,38 +250,27 @@ SET(streflop_core_source
 
 # SoftFloat wrapper sources (conditionally added)
 if(STREFLOP_SOFT)
-	# Build SoftFloat wrappers with different specializations
-	SET(softfloat_wrapper_sources
-		"${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperSimple.cpp"
-		"${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperDouble.cpp"
-		"${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperExtended.cpp"
-	)
-	
 	# Generate specialized SoftFloat wrapper files
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/SoftFloatWrapper.cpp 
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/SoftFloatWrapper.cpp
 		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperSimple.cpp COPYONLY)
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/SoftFloatWrapper.cpp 
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/SoftFloatWrapper.cpp
 		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperDouble.cpp COPYONLY)
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/SoftFloatWrapper.cpp 
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/SoftFloatWrapper.cpp
 		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperExtended.cpp COPYONLY)
-	
+
 	# Set compile flags for specialized SoftFloat wrappers
-	SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperSimple.cpp 
+	SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperSimple.cpp
 		PROPERTIES COMPILE_FLAGS "-DN_SPECIALIZED=32")
-	SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperDouble.cpp 
+	SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperDouble.cpp
 		PROPERTIES COMPILE_FLAGS "-DN_SPECIALIZED=64")
-	SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperExtended.cpp 
+	SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperExtended.cpp
 		PROPERTIES COMPILE_FLAGS "-DN_SPECIALIZED=96")
-	
-	# Check for softfloat directory
-	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/softfloat/softfloat.cpp")
-		SET(softfloat_source "softfloat/softfloat.cpp")
-		SET(streflop_core_source ${streflop_core_source} 
-			${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperSimple.cpp
-			${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperDouble.cpp
-			${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperExtended.cpp
-			${softfloat_source})
-	endif()
+
+	SET(streflop_core_source ${streflop_core_source}
+		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperSimple.cpp
+		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperDouble.cpp
+		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperExtended.cpp
+		softfloat/softfloat.cpp)
 endif()
 
 # Create the static library
@@ -292,14 +284,33 @@ target_include_directories(streflop PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# Set FPU type compile definitions
+# Set FPU type compile definitions and flags
 if(STREFLOP_SOFT)
 	target_compile_definitions(streflop PUBLIC STREFLOP_SOFT)
 elseif(STREFLOP_SSE)
 	target_compile_definitions(streflop PUBLIC STREFLOP_SSE)
+	if(NOT MSVC)
+		target_compile_options(streflop PRIVATE -mfpmath=sse -msse -msse2)
+	endif()
 else()
 	# Default to X87 mode
 	target_compile_definitions(streflop PUBLIC STREFLOP_X87)
+	if(NOT MSVC)
+		target_compile_options(streflop PRIVATE -mfpmath=387)
+	endif()
+endif()
+
+# Add NO_DENORMALS option if enabled
+if(STREFLOP_NO_DENORMALS)
+	target_compile_definitions(streflop PUBLIC STREFLOP_NO_DENORMALS)
+endif()
+
+# Apply core compile flags (matching original Makefile.common)
+if(NOT MSVC)
+	target_compile_options(streflop PRIVATE
+		-O3 -pipe -g -frename-registers
+		-frounding-math -fsignaling-nans -fno-strict-aliasing -Wall
+	)
 endif()
 
 # Set library properties
