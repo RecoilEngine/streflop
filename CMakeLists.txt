@@ -7,8 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Options
 option(STREFLOP_SSE "Use SSE instead of x87 extended precision" OFF)
+option(STREFLOP_NEON "Use ARM NEON FPU with deterministic rounding" OFF)
 option(STREFLOP_SOFT "Use soft float" OFF)
 option(STREFLOP_NO_DENORMALS "Squash denormals to zero" OFF)
+option(STREFLOP_SNAN "Enable signaling NaN exception traps" OFF)
 option(BUILD_TESTS "Build test executables" OFF)
 
 # Float-32 source files
@@ -234,8 +236,8 @@ endif()
 SET_SOURCE_FILES_PROPERTIES(${libm_flt32_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_FLT32 ${cxxflags}")
 SET_SOURCE_FILES_PROPERTIES(${libm_dbl64_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_DBL64 ${cxxflags}")
 
-# Conditionally add long double sources (not for SSE mode)
-if(NOT STREFLOP_SSE)
+# Conditionally add long double sources (not for SSE or NEON mode)
+if(NOT STREFLOP_SSE AND NOT STREFLOP_NEON)
 	SET_SOURCE_FILES_PROPERTIES(${libm_ldbl96_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_LDBL96 ${cxxflags}")
 	SET(full_libm_source ${libm_flt32_source} ${libm_dbl64_source} ${libm_ldbl96_source})
 else()
@@ -293,6 +295,11 @@ elseif(STREFLOP_SSE)
 	if(NOT MSVC)
 		target_compile_options(streflop PRIVATE -mfpmath=sse -msse -msse2)
 	endif()
+elseif(STREFLOP_NEON)
+	target_compile_definitions(streflop PUBLIC STREFLOP_NEON)
+	if(NOT MSVC)
+		target_compile_options(streflop PRIVATE -march=armv8-a+simd)
+	endif()
 else()
 	# Default to X87 mode
 	target_compile_definitions(streflop PUBLIC STREFLOP_X87)
@@ -304,6 +311,11 @@ endif()
 # Add NO_DENORMALS option if enabled
 if(STREFLOP_NO_DENORMALS)
 	target_compile_definitions(streflop PUBLIC STREFLOP_NO_DENORMALS)
+endif()
+
+# Add signaling NaN support if enabled
+if(STREFLOP_SNAN)
+	target_compile_definitions(streflop PUBLIC STREFLOP_SNAN)
 endif()
 
 # Apply core compile flags (matching original Makefile.common)

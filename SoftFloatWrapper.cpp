@@ -275,6 +275,22 @@ template<> struct FloatConverter<N_SPECIALIZED, long double, 16> {
 };
 
 
+// Specialization for long double when sizeof(long double) == 8 (ARM64 macOS/Linux)
+// On ARM64, long double is identical to double (both 8 bytes), but it's a distinct C++ type.
+#if defined(__aarch64__) || defined(__arm64__)
+template<> struct FloatConverter<N_SPECIALIZED, long double, 8> {
+    static inline SF_TYPE
+    convert_from_float(const long double a_float) {
+        return SF_APPEND(float64_to_)(*reinterpret_cast<const float64*>(&a_float));
+    }
+    static inline long double convert_to_float(SF_TYPE value) {
+        float64 res = SF_PREPEND(_to_float64)(value);
+        return *reinterpret_cast<long double*>(&res);
+    }
+};
+#endif
+
+
 #define STREFLOP_X87DENORMAL_NATIVE_OPS_FLOAT(native_type) \
 template<> SoftFloatWrapper<N_SPECIALIZED>::SoftFloatWrapper(const native_type f) { \
     value<SF_TYPE>() = FloatConverter< N_SPECIALIZED, native_type, sizeof(native_type)>::convert_from_float(f); \
