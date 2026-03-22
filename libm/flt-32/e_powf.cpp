@@ -18,7 +18,7 @@
 static char rcsid[] = "$NetBSD: e_powf.c,v 1.7f 1996/04/08 15:43:44 phil Exp $";
 #endif
 
-#include "math.h"
+#include "libm_math.h"
 #include "math_private.h"
 
 static const Simple huge = 1.0e+30f, tiny = 1.0e-30f;
@@ -80,7 +80,7 @@ ivln2_l  =  7.0526075433e-06f; /* 0x36eca570 =1/ln2 tail*/
 
     /* x==+-1 */
 	if(x == 1.0f) return one;
-	if(x == -1.0f && isinf(y)) return one;
+	if(x == -1.0f && streflop_libm::isinf(y)) return one;
 
     /* +-NaN return x+y */
 	if(ix > 0x7f800000 ||

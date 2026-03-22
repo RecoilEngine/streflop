@@ -12,6 +12,9 @@ Nicolas Brodu, 2006
 #ifndef SOFTFLOAT_H
 #define SOFTFLOAT_H
 
+// Need milieu.h for int64/uint64 typedefs — on ARM64, int64_t is 'long' not 'long long'
+#include "milieu.h"
+
 namespace streflop {
 namespace SoftFloat {
 
@@ -131,10 +134,10 @@ floatx80 int32_to_floatx80( int );
 #ifdef FLOAT128
 float128 int32_to_float128( int );
 #endif
-float32 int64_to_float32( long long );
-float64 int64_to_float64( long long );
+float32 int64_to_float32( int64 );
+float64 int64_to_float64( int64 );
 #ifdef FLOATX80
-floatx80 int64_to_floatx80( long long );
+floatx80 int64_to_floatx80( int64 );
 #endif
 #ifdef FLOAT128
 float128 int64_to_float128( long long );
@@ -143,10 +146,10 @@ float128 int64_to_float128( long long );
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE single-precision conversion routines.
 *----------------------------------------------------------------------------*/
-int float32_to_int32( float32 );
-int float32_to_int32_round_to_zero( float32 );
-long long float32_to_int64( float32 );
-long long float32_to_int64_round_to_zero( float32 );
+int32 float32_to_int32( float32 );
+int32 float32_to_int32_round_to_zero( float32 );
+int64 float32_to_int64( float32 );
+int64 float32_to_int64_round_to_zero( float32 );
 float64 float32_to_float64( float32 );
 #ifdef FLOATX80
 floatx80 float32_to_floatx80( float32 );
@@ -176,10 +179,10 @@ char float32_is_signaling_nan( float32 );
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE double-precision conversion routines.
 *----------------------------------------------------------------------------*/
-int float64_to_int32( float64 );
-int float64_to_int32_round_to_zero( float64 );
-long long float64_to_int64( float64 );
-long long float64_to_int64_round_to_zero( float64 );
+int32 float64_to_int32( float64 );
+int32 float64_to_int32_round_to_zero( float64 );
+int64 float64_to_int64( float64 );
+int64 float64_to_int64_round_to_zero( float64 );
 float32 float64_to_float32( float64 );
 #ifdef FLOATX80
 floatx80 float64_to_floatx80( float64 );
@@ -211,10 +214,10 @@ char float64_is_signaling_nan( float64 );
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE extended double-precision conversion routines.
 *----------------------------------------------------------------------------*/
-int floatx80_to_int32( floatx80 );
-int floatx80_to_int32_round_to_zero( floatx80 );
-long long floatx80_to_int64( floatx80 );
-long long floatx80_to_int64_round_to_zero( floatx80 );
+int32 floatx80_to_int32( floatx80 );
+int32 floatx80_to_int32_round_to_zero( floatx80 );
+int64 floatx80_to_int64( floatx80 );
+int64 floatx80_to_int64_round_to_zero( floatx80 );
 float32 floatx80_to_float32( floatx80 );
 float64 floatx80_to_float64( floatx80 );
 #ifdef FLOAT128
@@ -252,10 +255,10 @@ char floatx80_is_signaling_nan( floatx80 );
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE quadruple-precision conversion routines.
 *----------------------------------------------------------------------------*/
-int float128_to_int32( float128 );
-int float128_to_int32_round_to_zero( float128 );
-long long float128_to_int64( float128 );
-long long float128_to_int64_round_to_zero( float128 );
+int32 float128_to_int32( float128 );
+int32 float128_to_int32_round_to_zero( float128 );
+int64 float128_to_int64( float128 );
+int64 float128_to_int64_round_to_zero( float128 );
 float32 float128_to_float32( float128 );
 float64 float128_to_float64( float128 );
 #ifdef FLOATX80

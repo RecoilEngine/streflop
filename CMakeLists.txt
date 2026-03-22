@@ -1,15 +1,36 @@
 cmake_minimum_required(VERSION 3.10)
 project(streflop C CXX)
 
-# Set C++20 standard
-set(CMAKE_CXX_STANDARD 20)
+# Set C++17 standard
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Options
+option(STREFLOP_AUTO "Autodetect the most appropriate Streflop implementation" ON)
 option(STREFLOP_SSE "Use SSE instead of x87 extended precision" OFF)
+option(STREFLOP_NEON "Use ARM NEON (auto-enabled on ARM64 when SSE/SOFT are off)" OFF)
 option(STREFLOP_SOFT "Use soft float" OFF)
 option(STREFLOP_NO_DENORMALS "Squash denormals to zero" OFF)
 option(BUILD_TESTS "Build test executables" OFF)
+
+# Autodetect STREFLOP mode when STREFLOP_AUTO is ON and no explicit mode is selected
+if(STREFLOP_AUTO AND NOT STREFLOP_SSE AND NOT STREFLOP_NEON AND NOT STREFLOP_SOFT AND NOT STREFLOP_NO_DENORMALS AND NOT BUILD_TESTS)
+	# Use HOST processor as fallback when cross-compiling (CMAKE_SYSTEM_PROCESSOR may be empty)
+	if(NOT CMAKE_SYSTEM_PROCESSOR AND CMAKE_HOST_SYSTEM_PROCESSOR)
+		set(_streflop_processor "${CMAKE_HOST_SYSTEM_PROCESSOR}")
+	else()
+		set(_streflop_processor "${CMAKE_SYSTEM_PROCESSOR}")
+	endif()
+	if(_streflop_processor MATCHES "arm64|aarch64|armv8|ARM64|AARCH64")
+		set(STREFLOP_NEON ON CACHE BOOL "Use ARM NEON (autodetected)" FORCE)
+		message(STATUS "STREFLOP: Autodetected ARM64 platform - enabling NEON mode")
+	elseif(_streflop_processor MATCHES "x86|i686|amd64|AMD64|x86_64")
+		set(STREFLOP_SSE ON CACHE BOOL "Use SSE (autodetected)" FORCE)
+		message(STATUS "STREFLOP: Autodetected x86/x86_64 platform - enabling SSE mode")
+	else()
+		message(FATAL_ERROR "STREFLOP: Unknown architecture '${_streflop_processor}', cannot proceed with autodetection")
+	endif()
+endif()
 
 # Float-32 source files
 SET(libm_flt32_source
@@ -217,6 +238,7 @@ SET(libm_ldbl96_source
 )
 
 # MSVC 64-bit requires an ASM file for FPU settings
+SET(fpu_settings_asm "")
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
 	ENABLE_LANGUAGE(ASM_MASM)
 	SET(fpu_settings_asm "FPUSettings.asm")
@@ -225,18 +247,25 @@ endif()
 # Compile flags for libm sources only: include path and warning suppression.
 # Optimization and fpmath flags are set via target_compile_options and apply
 # to all sources (including libm) uniformly.
-SET(cxxflags "-I\"${CMAKE_CURRENT_SOURCE_DIR}/libm/headers\"")
+SET(streflop_cxx_flags "-I\"${CMAKE_CURRENT_SOURCE_DIR}/libm/headers\"")
 if(NOT MSVC)
-	SET(cxxflags "${cxxflags} -w -Wno-narrowing")
+	SET(streflop_cxx_flags "${streflop_cxx_flags} -w -Wno-narrowing")
 endif()
 
-# Set compile flags for libm sources
-SET_SOURCE_FILES_PROPERTIES(${libm_flt32_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_FLT32 ${cxxflags}")
-SET_SOURCE_FILES_PROPERTIES(${libm_dbl64_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_DBL64 ${cxxflags}")
+# Set compile flags for libm sources.
+# -ffp-contract=off prevents FMA fusion (fmadd/fmsub) in transcendental functions;
+if(MSVC)
+	SET(libm_extra_flags "/fp:strict")
+else()
+	SET(libm_extra_flags "-ffp-contract=off")
+endif()
 
-# Conditionally add long double sources (not for SSE mode)
-if(NOT STREFLOP_SSE)
-	SET_SOURCE_FILES_PROPERTIES(${libm_ldbl96_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_LDBL96 ${cxxflags}")
+SET_SOURCE_FILES_PROPERTIES(${libm_flt32_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_FLT32 ${streflop_cxx_flags} ${libm_extra_flags}")
+SET_SOURCE_FILES_PROPERTIES(${libm_dbl64_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_DBL64 ${streflop_cxx_flags} ${libm_extra_flags}")
+
+# Conditionally add long double sources (not for SSE or NEON mode — no x87 extended precision)
+if(NOT STREFLOP_SSE AND NOT STREFLOP_NEON)
+	SET_SOURCE_FILES_PROPERTIES(${libm_ldbl96_source} PROPERTIES COMPILE_FLAGS "-DLIBM_COMPILING_LDBL96 ${streflop_cxx_flags} ${libm_extra_flags}")
 	SET(full_libm_source ${libm_flt32_source} ${libm_dbl64_source} ${libm_ldbl96_source})
 else()
 	SET(full_libm_source ${libm_flt32_source} ${libm_dbl64_source})
@@ -244,7 +273,7 @@ endif()
 
 # Core library source files
 SET(streflop_core_source
-	Math.cpp
+	SMath.cpp
 	Random.cpp
 	${fpu_settings_asm}
 )
@@ -272,6 +301,11 @@ if(STREFLOP_SOFT)
 		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperDouble.cpp
 		${CMAKE_CURRENT_BINARY_DIR}/SoftFloatWrapperExtended.cpp
 		softfloat/softfloat.cpp)
+
+	# Suppress warnings in third-party softfloat code
+	if(NOT MSVC)
+		SET_SOURCE_FILES_PROPERTIES(softfloat/softfloat.cpp PROPERTIES COMPILE_FLAGS "-w")
+	endif()
 endif()
 
 # Create the static library
@@ -293,25 +327,24 @@ elseif(STREFLOP_SSE)
 	if(NOT MSVC)
 		target_compile_options(streflop PRIVATE -mfpmath=sse -msse -msse2)
 	endif()
+elseif(STREFLOP_NEON)
+	target_compile_definitions(streflop PUBLIC STREFLOP_NEON)
+	if(NOT MSVC)
+		target_compile_options(streflop PRIVATE -march=armv8-a+simd)
+	endif()
 else()
 	# Default to X87 mode
 	target_compile_definitions(streflop PUBLIC STREFLOP_X87)
 	if(NOT MSVC)
-		target_compile_options(streflop PRIVATE -mfpmath=387)
+		# X87 mode: use 387 FPU
+		# Force IEEE 754 compliance by storing to memory after each FPU operation
+		target_compile_options(streflop PRIVATE -mfpmath=387 -ffloat-store)
 	endif()
 endif()
 
 # Add NO_DENORMALS option if enabled
 if(STREFLOP_NO_DENORMALS)
 	target_compile_definitions(streflop PUBLIC STREFLOP_NO_DENORMALS)
-endif()
-
-# Apply core compile flags (matching original Makefile.common)
-if(NOT MSVC)
-	target_compile_options(streflop PRIVATE
-		-O3 -pipe -g -frename-registers
-		-frounding-math -fsignaling-nans -fno-strict-aliasing -Wall
-	)
 endif()
 
 # Set library properties
@@ -328,16 +361,27 @@ if(BUILD_TESTS)
 	target_link_libraries(randomTest streflop)
 endif()
 
-# Installation rules
-install(TARGETS streflop ARCHIVE DESTINATION lib)
-install(FILES 
-	Math.h
-	Random.h
-	streflop.h
-	FPUSettings.h
-	IntegerTypes.h
-	System.h
-	X87DenormalSquasher.h
-	SoftFloatWrapper.h
-	DESTINATION include/streflop
-)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.21")
+  set(STREFLOP_STANDALONE ${PROJECT_IS_TOP_LEVEL})
+else()
+  if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+    set(STREFLOP_STANDALONE TRUE)
+  else()
+    set(STREFLOP_STANDALONE FALSE)
+  endif()
+endif()
+
+if(STREFLOP_STANDALONE)
+  install(TARGETS streflop ARCHIVE DESTINATION lib)
+  install(FILES
+    SMath.h
+    Random.h
+    streflop.h
+    FPUSettings.h
+    IntegerTypes.h
+    System.h
+    X87DenormalSquasher.h
+    SoftFloatWrapper.h
+    DESTINATION include/streflop
+  )
+endif()

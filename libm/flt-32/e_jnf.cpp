@@ -18,7 +18,7 @@
 static char rcsid[] = "$NetBSD: e_jnf.c,v 1.5f 1995/05/10 20:45:37 jtc Exp $";
 #endif
 
-#include "math.h"
+#include "libm_math.h"
 #include "math_private.h"
 
 namespace streflop_libm {
@@ -160,7 +160,7 @@ static Simple zero  =  0.0000000000e+00f;
 		        a = temp;
 			di -= two;
 		    /* scale b to avoid spurious overflow */
-			if(b>(Simple)1e10) {
+			if(b>(Simple)1e10f) {
 			    a /= b;
 			    t /= b;
 			    b  = one;

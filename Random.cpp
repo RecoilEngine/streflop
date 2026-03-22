@@ -12,13 +12,18 @@
 // Include time(0) function to get a seed based on system time
 #include <time.h>
 #include <iostream>
-using namespace std;
 #include "streflop.h"
 
 // Include endian-specific code
+// Note: System.h has include guards, so if already included via streflop.h,
+// the #undef + re-include trick won't re-define the macros. Define directly.
 #undef __BYTE_ORDER
 #undef __FLOAT_WORD_ORDER
 #include "System.h"
+#ifndef __FLOAT_WORD_ORDER
+#define __BYTE_ORDER 1234
+#define __FLOAT_WORD_ORDER 1234
+#endif
 
 namespace streflop {
 
@@ -960,7 +965,6 @@ template<> Extended NRandom(Extended mean, Extended std_dev, Extended *secondary
     return NRandom_Generic<Extended>(mean, std_dev, secondary,state);
 }
 #endif
-
 
 SizedUnsignedInteger<32>::Type RandomInit(RandomState& state) {
     return RandomInit(SizedUnsignedInteger<32>::Type(time(0)));

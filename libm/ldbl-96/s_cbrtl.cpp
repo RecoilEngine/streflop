@@ -20,7 +20,7 @@
    Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
    02111-1307 USA.  */
 
-#include "math.h"
+#include "SMath.h"
 #include "math_private.h"
 
 
@@ -54,7 +54,7 @@ __cbrtl (Extended x)
      if necessary.
      Note: *Our* version of `frexp' sets XE to zero if the argument is
      Inf or NaN.  This is not portable but faster.  */
-  if (xe == 0 && fpclassify (x) <= FP_ZERO)
+  if (xe == 0 && streflop_libm::fpclassify (x) <= FP_ZERO)
     return x + x;
 
   u = (((-1.34661104733595206551E-1l * xm
