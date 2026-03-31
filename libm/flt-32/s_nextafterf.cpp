@@ -64,7 +64,11 @@ namespace streflop_libm {
 	  x = x+x;	/* overflow  */
 #if FLT_EVAL_METHOD != 0
 	  if (FLT_EVAL_METHOD != 0)
+#ifndef _MSC_VER
 	    asm ("" : "=m"(x) : "m"(x));
+#else
+	    x = *((volatile int*)&x) = x;
+#endif
 #endif
 	  return x;	/* overflow  */
 	}

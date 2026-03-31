@@ -76,7 +76,11 @@ namespace streflop_libm {
 	if(hy>=0x7ff00000) {
 	  x = x+x;	/* overflow  */
 	  if (FLT_EVAL_METHOD != 0 && FLT_EVAL_METHOD != 1)
+#ifndef _MSC_VER
 	    asm ("" : "=m"(x) : "m"(x));
+#else
+	    x = *((volatile int*)&x) = x;
+#endif
 	  return x;	/* overflow  */
 	}
 	if(hy<0x00100000) {		/* underflow */
